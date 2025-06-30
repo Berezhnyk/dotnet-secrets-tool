@@ -4,7 +4,7 @@ REM This script downloads and installs the latest release
 
 setlocal enabledelayedexpansion
 
-set "REPO=ivanberezhnyk/SecretsTool"
+set "REPO=berezhnyk/SecretsTool"
 set "INSTALL_DIR=%USERPROFILE%\.local\bin"
 set "BINARY_NAME=SecretsTool.exe"
 

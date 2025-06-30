@@ -5,7 +5,7 @@
 
 set -e
 
-REPO="ivanberezhnyk/SecretsTool"
+REPO="berezhnyk/SecretsTool"
 INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="SecretsTool"
 

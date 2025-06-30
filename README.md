@@ -6,13 +6,13 @@ A .NET 8 CLI tool that fetches GitLab CI/CD project-level variables via the GitL
 
 ### Option 1: Download Pre-built Binaries (Recommended)
 
-Download the latest release from the [GitHub Releases page](https://github.com/ivanberezhnyk/SecretsTool/releases).
+Download the latest release from the [GitHub Releases page](https://github.com/berezhnyk/SecretsTool/releases).
 
 #### Quick Install Scripts
 
 **macOS/Linux:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ivanberezhnyk/SecretsTool/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/berezhnyk/SecretsTool/main/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell):**
@@ -22,7 +22,7 @@ curl -fsSL https://raw.githubusercontent.com/ivanberezhnyk/SecretsTool/main/scri
 
 #### Manual Installation
 
-1. Go to [Releases](https://github.com/ivanberezhnyk/SecretsTool/releases)
+1. Go to [Releases](https://github.com/berezhnyk/SecretsTool/releases)
 2. Download the appropriate archive for your platform:
    - `secretstool-win-x64.zip` - Windows x64
    - `secretstool-win-arm64.zip` - Windows ARM64
@@ -176,7 +176,7 @@ This project uses GitHub Actions for automated builds and releases.
 
 To create a beta release:
 
-1. Go to the [Actions tab](https://github.com/ivanberezhnyk/SecretsTool/actions)
+1. Go to the [Actions tab](https://github.com/berezhnyk/SecretsTool/actions)
 2. Select "Create Beta Release" workflow
 3. Click "Run workflow"
 4. Enter a version like `1.0.0-beta.1`

@@ -47,8 +47,10 @@ jobs:
         fi
 
     - name: Test build artifacts
+      shell: pwsh
       run: |
-        ls -la bin/Release/net8.0/
+        Write-Host "Build artifacts:"
+        Get-ChildItem bin/Release/net8.0/ -Recurse | Select-Object Name, Length
 
   build-test:
     name: Build Test Release
@@ -65,10 +67,11 @@ jobs:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
     - name: Test cross-platform builds
+      shell: pwsh
       run: |
         dotnet publish SecretsTool.csproj -c Release -r win-x64 --self-contained -o ./test-publish/win-x64
         dotnet publish SecretsTool.csproj -c Release -r osx-x64 --self-contained -o ./test-publish/osx-x64
         dotnet publish SecretsTool.csproj -c Release -r linux-x64 --self-contained -o ./test-publish/linux-x64
         
-        echo "Build artifacts:"
-        find ./test-publish -name "SecretsTool*" -type f
+        Write-Host "Build artifacts:"
+        Get-ChildItem ./test-publish -Recurse -Name "SecretsTool*"
