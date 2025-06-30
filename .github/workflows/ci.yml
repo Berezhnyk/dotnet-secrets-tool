@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore SecretsTool.csproj
+
+    - name: Build
+      run: dotnet build SecretsTool.csproj --configuration Release --no-restore
+
+    - name: Test CLI help
+      run: dotnet run --project SecretsTool.csproj -- --help
+
+    - name: Test CLI validation (should fail)
+      shell: bash
+      run: |
+        # This should fail and return non-zero exit code
+        if dotnet run --project SecretsTool.csproj; then
+          echo "Expected command to fail but it succeeded"
+          exit 1
+        else
+          echo "Command failed as expected (missing required arguments)"
+        fi
+
+    - name: Test build artifacts
+      run: |
+        ls -la bin/Release/net8.0/
+
+  build-test:
+    name: Build Test Release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Test cross-platform builds
+      run: |
+        dotnet publish SecretsTool.csproj -c Release -r win-x64 --self-contained -o ./test-publish/win-x64
+        dotnet publish SecretsTool.csproj -c Release -r osx-x64 --self-contained -o ./test-publish/osx-x64
+        dotnet publish SecretsTool.csproj -c Release -r linux-x64 --self-contained -o ./test-publish/linux-x64
+        
+        echo "Build artifacts:"
+        find ./test-publish -name "SecretsTool*" -type f
