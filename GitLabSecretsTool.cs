@@ -12,7 +12,7 @@ public class GitLabSecretsTool
         _httpClient = new HttpClient();
     }
 
-    public async Task ExecuteAsync(string projectId, string? token, string gitlabUrl, string? prefix, string? environment, string? userSecretsId, bool onlyNew)
+    public async Task ExecuteAsync(string projectId, string? token, string gitlabUrl, string? prefix, string? environment, string? userSecretsId, bool onlyNew, bool verbose = false)
     {
         // Validate inputs
         var accessToken = token ?? Environment.GetEnvironmentVariable("GITLAB_TOKEN");
@@ -36,25 +36,27 @@ public class GitLabSecretsTool
         Console.WriteLine($"Using UserSecretsId: {secretsId}");
 
         // Fetch GitLab variables
-        var variables = await FetchGitLabVariablesAsync(gitlabUrl, projectId, accessToken);
+        var variables = await FetchGitLabVariablesAsync(gitlabUrl, projectId, accessToken, verbose);
         Console.WriteLine($"Fetched {variables.Count} variables from GitLab");
 
         // Filter variables by prefix if specified
         if (!string.IsNullOrEmpty(prefix))
         {
+            var beforeFilter = variables.Count;
             variables = variables.Where(v => v.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList();
-            Console.WriteLine($"Filtered to {variables.Count} variables with prefix '{prefix}'");
+            Console.WriteLine($"Filtered by prefix '{prefix}': {beforeFilter} -> {variables.Count} variables");
         }
 
         // Filter variables by environment if specified
         if (!string.IsNullOrEmpty(environment))
         {
+            var beforeFilter = variables.Count;
             variables = variables.Where(v => 
                 string.IsNullOrEmpty(v.EnvironmentScope) || 
                 v.EnvironmentScope == "*" || 
                 string.Equals(v.EnvironmentScope, environment, StringComparison.OrdinalIgnoreCase)
             ).ToList();
-            Console.WriteLine($"Filtered to {variables.Count} variables for environment '{environment}' (including global variables)");
+            Console.WriteLine($"Filtered by environment '{environment}': {beforeFilter} -> {variables.Count} variables (including global variables)");
         }
 
         // Get existing secrets
@@ -62,7 +64,7 @@ public class GitLabSecretsTool
         var existingSecrets = await ReadExistingSecretsAsync(secretsPath);
 
         // Merge secrets
-        var (addedCount, skippedCount) = MergeSecrets(existingSecrets, variables, onlyNew);
+        var (addedCount, skippedCount) = MergeSecrets(existingSecrets, variables, onlyNew, verbose);
 
         // Write secrets back
         await WriteSecretsAsync(secretsPath, existingSecrets);
@@ -76,42 +78,96 @@ public class GitLabSecretsTool
             Console.WriteLine($"  - Skipped {skippedCount} already existing keys");
         }
         
+        // Check for duplicate keys across different environments
+        var keyGroups = variables.GroupBy(v => v.Key).Where(g => g.Count() > 1).ToList();
+        if (keyGroups.Any())
+        {
+            Console.WriteLine($"  - Note: {keyGroups.Count} key(s) had multiple values for different environments (last value wins)");
+            if (verbose)
+            {
+                foreach (var group in keyGroups)
+                {
+                    Console.WriteLine($"    • {group.Key}: {string.Join(", ", group.Select(v => v.EnvironmentScope ?? "*"))} environments");
+                }
+            }
+        }
+        
         Console.WriteLine($"Secrets written to: {secretsPath}");
     }
 
-    private async Task<List<GitLabVariable>> FetchGitLabVariablesAsync(string gitlabUrl, string projectId, string accessToken)
+    private async Task<List<GitLabVariable>> FetchGitLabVariablesAsync(string gitlabUrl, string projectId, string accessToken, bool verbose = false)
     {
-        var apiUrl = $"{gitlabUrl.TrimEnd('/')}/api/v4/projects/{projectId}/variables";
+        var baseApiUrl = $"{gitlabUrl.TrimEnd('/')}/api/v4/projects/{projectId}/variables";
         
         _httpClient.DefaultRequestHeaders.Clear();
         _httpClient.DefaultRequestHeaders.Add("PRIVATE-TOKEN", accessToken);
 
+        var allVariables = new List<GitLabVariable>();
+        var page = 1;
+        var perPage = 100; // Maximum allowed by GitLab API
+
         try
         {
-            var response = await _httpClient.GetAsync(apiUrl);
-            
-            if (!response.IsSuccessStatusCode)
+            while (true)
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"GitLab API request failed with status {response.StatusCode}: {errorContent}");
+                var apiUrl = $"{baseApiUrl}?page={page}&per_page={perPage}";
+                if (verbose)
+                    Console.WriteLine($"Fetching page {page} from GitLab API...");
+
+                var response = await _httpClient.GetAsync(apiUrl);
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    throw new HttpRequestException($"GitLab API request failed with status {response.StatusCode}: {errorContent}");
+                }
+
+                var jsonContent = await response.Content.ReadAsStringAsync();
+                var variables = JsonSerializer.Deserialize(jsonContent, AppJsonSerializerContext.Default.ListJsonElement);
+
+                if (variables == null || !variables.Any())
+                {
+                    // No more pages
+                    break;
+                }
+
+                foreach (var variable in variables)
+                {
+                    var key = variable.GetProperty("key").GetString() ?? "";
+                    var value = variable.GetProperty("value").GetString() ?? "";
+                    var protectedProp = variable.TryGetProperty("protected", out var protectedEl) ? protectedEl.GetBoolean() : false;
+                    var maskedProp = variable.TryGetProperty("masked", out var maskedEl) ? maskedEl.GetBoolean() : false;
+                    var environmentScope = variable.TryGetProperty("environment_scope", out var envEl) ? envEl.GetString() : null;
+
+                    // Skip variables with empty keys
+                    if (string.IsNullOrWhiteSpace(key))
+                    {
+                        if (verbose)
+                            Console.WriteLine("Warning: Skipping variable with empty key");
+                        continue;
+                    }
+
+                    if (verbose)
+                    {
+                        Console.WriteLine($"  Variable: {key} (env: {environmentScope ?? "*"}, protected: {protectedProp}, masked: {maskedProp})");
+                    }
+
+                    allVariables.Add(new GitLabVariable(key, value, protectedProp, maskedProp, environmentScope));
+                }
+
+                // Check if we got fewer results than requested, indicating the last page
+                if (variables.Count() < perPage)
+                {
+                    break;
+                }
+
+                page++;
             }
 
-            var jsonContent = await response.Content.ReadAsStringAsync();
-            var variables = JsonSerializer.Deserialize(jsonContent, AppJsonSerializerContext.Default.ListJsonElement);
+            if (verbose)
+                Console.WriteLine($"Fetched {allVariables.Count} total variables from {page} page(s)");
 
-            var result = new List<GitLabVariable>();
-            foreach (var variable in variables ?? new List<JsonElement>())
-            {
-                var key = variable.GetProperty("key").GetString() ?? "";
-                var value = variable.GetProperty("value").GetString() ?? "";
-                var protectedProp = variable.TryGetProperty("protected", out var protectedEl) ? protectedEl.GetBoolean() : false;
-                var maskedProp = variable.TryGetProperty("masked", out var maskedEl) ? maskedEl.GetBoolean() : false;
-                var environmentScope = variable.TryGetProperty("environment_scope", out var envEl) ? envEl.GetString() : null;
-
-                result.Add(new GitLabVariable(key, value, protectedProp, maskedProp, environmentScope));
-            }
-
-            return result;
+            return allVariables;
         }
         catch (HttpRequestException)
         {
@@ -195,23 +251,42 @@ public class GitLabSecretsTool
         }
     }
 
-    private (int addedCount, int skippedCount) MergeSecrets(Dictionary<string, string> existingSecrets, List<GitLabVariable> variables, bool onlyNew)
+    private (int addedCount, int skippedCount) MergeSecrets(Dictionary<string, string> existingSecrets, List<GitLabVariable> variables, bool onlyNew, bool verbose = false)
     {
         int addedCount = 0;
         int skippedCount = 0;
+
+        if (verbose)
+            Console.WriteLine($"Merging {variables.Count} variables (onlyNew: {onlyNew})");
+        if (verbose)
+            Console.WriteLine($"Existing secrets count: {existingSecrets.Count}");
 
         foreach (var variable in variables)
         {
             if (onlyNew && existingSecrets.ContainsKey(variable.Key))
             {
+                if (verbose)
+                    Console.WriteLine($"  Skipping existing key: {variable.Key}");
                 skippedCount++;
                 continue;
+            }
+
+            var isOverwriting = existingSecrets.ContainsKey(variable.Key);
+            if (isOverwriting && verbose)
+            {
+                Console.WriteLine($"  Overwriting key: {variable.Key} (previous environment may be different)");
+            }
+            else if (verbose)
+            {
+                Console.WriteLine($"  Adding new key: {variable.Key}");
             }
 
             existingSecrets[variable.Key] = variable.Value;
             addedCount++;
         }
 
+        if (verbose)
+            Console.WriteLine($"Final secrets count: {existingSecrets.Count}");
         return (addedCount, skippedCount);
     }
 
@@ -230,7 +305,7 @@ public class GitLabSecretsTool
             TypeInfoResolver = AppJsonSerializerContext.Default
         };
 
-        var jsonContent = JsonSerializer.Serialize(secrets, AppJsonSerializerContext.Default.DictionaryStringString);
+        var jsonContent = JsonSerializer.Serialize(secrets, options);
         await File.WriteAllTextAsync(secretsPath, jsonContent);
     }
 

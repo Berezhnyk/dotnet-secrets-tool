@@ -32,6 +32,23 @@ curl -fsSL https://raw.githubusercontent.com/berezhnyk/dotnet-secrets-tool/main/
 3. Extract the executable
 4. Add to your PATH or run directly
 
+##### macOS Quarantine Workaround
+
+If you encounter the error "Apple could not verify 'SecretsTool' is free of malware that may harm your Mac or compromise your privacy", you can resolve this by removing the quarantine flag and installing the tool manually:
+
+```bash
+# Remove quarantine flag
+xattr -d com.apple.quarantine ~/Downloads/SecretsTool
+
+# Move to bin folder (requires sudo)
+sudo mv ~/Downloads/SecretsTool /usr/local/bin/SecretsTool
+
+# Make executable (only if you encounter permission errors)
+sudo chmod +x /usr/local/bin/SecretsTool
+```
+
+After these steps, you should be able to run `SecretsTool` from anywhere in your terminal.
+
 ### Option 2: Build from Source
 
 1. Clone this repository
