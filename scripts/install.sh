@@ -5,7 +5,7 @@
 
 set -e
 
-REPO="berezhnyk/SecretsTool"
+REPO="berezhnyk/dotnet-secrets-tool"
 INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="SecretsTool"
 

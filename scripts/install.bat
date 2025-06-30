@@ -4,7 +4,7 @@ REM This script downloads and installs the latest release
 
 setlocal enabledelayedexpansion
 
-set "REPO=berezhnyk/SecretsTool"
+set "REPO=berezhnyk/dotnet-secrets-tool"
 set "INSTALL_DIR=%USERPROFILE%\.local\bin"
 set "BINARY_NAME=SecretsTool.exe"
 

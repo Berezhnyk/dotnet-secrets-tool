@@ -15,8 +15,8 @@ Thank you for your interest in contributing to the GitLab Secrets Tool! This doc
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/SecretsTool.git
-   cd SecretsTool
+   git clone https://github.com/YOUR_USERNAME/dotnet-secrets-tool.git
+   cd dotnet-secrets-tool
    ```
 3. Build the project:
    ```bash
@@ -30,7 +30,7 @@ Thank you for your interest in contributing to the GitLab Secrets Tool! This doc
 ## Project Structure
 
 ```
-SecretsTool/
+dotnet-secrets-tool/
 ├── .github/workflows/     # GitHub Actions workflows
 ├── scripts/              # Installation scripts
 ├── SecretsTool.csproj    # Main project file
