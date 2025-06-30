@@ -97,7 +97,7 @@ public class GitLabSecretsTool
             }
 
             var jsonContent = await response.Content.ReadAsStringAsync();
-            var variables = JsonSerializer.Deserialize<List<JsonElement>>(jsonContent);
+            var variables = JsonSerializer.Deserialize(jsonContent, AppJsonSerializerContext.Default.ListJsonElement);
 
             var result = new List<GitLabVariable>();
             foreach (var variable in variables ?? new List<JsonElement>())
@@ -185,7 +185,7 @@ public class GitLabSecretsTool
                 return new Dictionary<string, string>();
             }
 
-            var secrets = JsonSerializer.Deserialize<Dictionary<string, string>>(jsonContent);
+            var secrets = JsonSerializer.Deserialize(jsonContent, AppJsonSerializerContext.Default.DictionaryStringString);
             return secrets ?? new Dictionary<string, string>();
         }
         catch (Exception ex)
@@ -226,10 +226,11 @@ public class GitLabSecretsTool
 
         var options = new JsonSerializerOptions
         {
-            WriteIndented = true
+            WriteIndented = true,
+            TypeInfoResolver = AppJsonSerializerContext.Default
         };
 
-        var jsonContent = JsonSerializer.Serialize(secrets, options);
+        var jsonContent = JsonSerializer.Serialize(secrets, AppJsonSerializerContext.Default.DictionaryStringString);
         await File.WriteAllTextAsync(secretsPath, jsonContent);
     }
 
