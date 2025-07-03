@@ -169,37 +169,47 @@ jobs:
           
           # Submit for notarization
           echo "⏳ Submitting for notarization (this may take a few minutes)..."
-          xcrun notarytool submit "$ARCHIVE_PATH" \
+          if xcrun notarytool submit "$ARCHIVE_PATH" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait
-          
-          if [[ $? -eq 0 ]]; then
+            --wait \
+            --verbose; then
+            
             echo "✅ Notarization successful! Stapling..."
             
             # Staple the notarization to the binary
-            xcrun stapler staple ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
-            
-            if [[ $? -eq 0 ]]; then
+            if xcrun stapler staple ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}; then
               echo "🎉 Notarization and stapling completed successfully!"
               echo "   Binary will run without any Gatekeeper warnings when downloaded."
+              
+              # Verify notarization
+              echo "🔍 Verifying notarization..."
+              spctl --assess --verbose=2 ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
             else
               echo "⚠️  Stapling failed, but notarization was successful"
+              echo "   Binary may still show warnings when downloaded"
             fi
           else
-            echo "⚠️  Notarization failed, but code signing was successful"
-            echo "   Binary is signed but may show Gatekeeper warnings when downloaded"
+            echo "❌ Notarization failed!"
+            echo "   This could be due to:"
+            echo "   - Invalid Apple ID credentials"
+            echo "   - App-specific password issues"
+            echo "   - Apple's notarization service being unavailable"
+            echo "   - Binary not meeting notarization requirements"
+            echo "   Binary is signed but will show Gatekeeper warnings when downloaded"
           fi
           
           # Clean up notarization temp files
           rm -rf "$TEMP_DIR"
         else
-          echo "ℹ️  Notarization skipped (APPLE_ID and APPLE_PASSWORD not provided)"
-          echo "   Binary is signed but may show Gatekeeper warnings when downloaded"
-          echo "   To enable notarization, add these optional secrets:"
+          echo "⚠️  Notarization skipped - Apple ID credentials not provided"
+          echo "   Binary is signed but will show Gatekeeper warnings when downloaded"
+          echo "   To enable notarization, add these secrets to your GitHub repository:"
           echo "   - APPLE_ID (your Apple ID email)"
-          echo "   - APPLE_PASSWORD (app-specific password)"
+          echo "   - APPLE_PASSWORD (app-specific password from appleid.apple.com)"
+          echo ""
+          echo "   The binary will work but users will see security warnings when downloading."
         fi
         
         # Clean up certificate files
