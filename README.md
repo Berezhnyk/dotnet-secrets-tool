@@ -32,7 +32,86 @@ curl -fsSL https://raw.githubusercontent.com/berezhnyk/dotnet-secrets-tool/main/
 3. Extract the executable
 4. Add to your PATH or run directly
 
-##### macOS Quarantine Workaround
+##### macOS Code Signing and Notarization
+
+If you encounter the error "Apple could not verify 'SecretsTool' is free of malware that may harm your Mac or compromise your privacy", this is due to macOS Gatekeeper security. Here are the solutions:
+
+**For End Users (Quick Fix):**
+```bash
+# Remove quarantine flag
+xattr -d com.apple.quarantine ~/Downloads/SecretsTool
+
+# Move to bin folder (requires sudo)
+sudo mv ~/Downloads/SecretsTool /usr/local/bin/SecretsTool
+
+# Make executable (only if you encounter permission errors)
+sudo chmod +x /usr/local/bin/SecretsTool
+```
+
+**For Developers with Apple Developer Account:**
+
+If you're building from source and have an Apple Developer account, you can properly code sign the application:
+
+**Option A: Local Code Signing**
+1. **Install your Apple Developer Certificate:**
+   - Download your "Developer ID Application" certificate from Apple Developer Portal
+   - Double-click to install it in your Keychain
+
+2. **Build and sign the application:**
+   ```bash
+   # Build for your platform
+   make publish
+   
+   # Sign the binary (requires Apple Developer Certificate)
+   ./scripts/codesign-macos.sh ./publish/osx-arm64/SecretsTool
+   
+   # Optional: Notarize for wider distribution
+   export APPLE_ID="your-apple-id@example.com"
+   export APPLE_PASSWORD="your-app-specific-password"
+   export APPLE_TEAM_ID="YOUR_TEAM_ID"
+   ./scripts/notarize-macos.sh ./publish/osx-arm64/SecretsTool
+   ```
+
+**Option B: GitHub Actions Code Signing (Recommended)**
+1. **Set up certificates for automated signing:**
+   ```bash
+   # Export your certificate for GitHub Actions
+   ./scripts/export-certificate.sh
+   
+   # Convert to base64 for GitHub secrets
+   base64 -i developer_id_certificate.p12 | pbcopy
+   ```
+
+2. **Add GitHub Secrets:**
+   - Go to your GitHub repository → Settings → Secrets and variables → Actions
+   - Add these secrets:
+     - `APPLE_CERTIFICATE`: (paste the base64 certificate)
+     - `APPLE_CERTIFICATE_PASSWORD`: (password you used when exporting)
+     - `APPLE_TEAM_ID`: (your Team ID from Apple Developer Portal)
+
+3. **Create signed releases:**
+   ```bash
+   # Create a new release - GitHub Actions will automatically sign it
+   git tag v1.0.3
+   git push origin v1.0.3
+   ```
+
+See `GITHUB_ACTIONS_SETUP.md` for detailed setup instructions.
+
+**Setting up App-Specific Password:**
+1. Go to [Apple ID Account Management](https://appleid.apple.com/account/manage)
+2. Sign in with your Apple ID
+3. In the "Security" section, click "Generate Password" under "App-Specific Passwords"
+4. Enter a label (e.g., "SecretsTool Notarization")
+5. Use this password for the `APPLE_PASSWORD` environment variable
+
+**Benefits of Code Signing:**
+- Eliminates Gatekeeper warnings
+- Users can run the application without security prompts
+- Builds trust with your users
+- Required for Mac App Store distribution (if applicable)
+
+##### macOS Quarantine Workaround (Alternative)
 
 If you encounter the error "Apple could not verify 'SecretsTool' is free of malware that may harm your Mac or compromise your privacy", you can resolve this by removing the quarantine flag and installing the tool manually:
 
@@ -60,8 +139,32 @@ After these steps, you should be able to run `SecretsTool` from anywhere in your
 ### Option 3: Using Make (macOS/Linux)
 
 ```bash
+# Build for current platform
 make build
+
+# Build and publish for current platform
+make publish
+
+# Build for all platforms
+make publish-all
+
+# Create distribution archives
+make dist
+
+# Create signed distribution (macOS with Developer Certificate)
+make dist-signed
 ```
+
+**Available Make targets:**
+- `make build` - Build the project
+- `make publish` - Publish single-file executable for current platform
+- `make publish-all` - Publish for all platforms
+- `make codesign-macos` - Code sign macOS binaries (requires Apple Developer Certificate)
+- `make dist` - Create distribution archives
+- `make dist-signed` - Create signed distribution archives (macOS only)
+- `make install` - Install locally for testing
+- `make clean` - Clean build artifacts
+- `make help` - Show all available targets
 
 ### Option 4: Publish Self-Contained Executables
 

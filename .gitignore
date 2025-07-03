@@ -1,6 +1,8 @@
 # Ignore build artifacts
 bin/
 obj/
+publish/
+dist/
 
 # Ignore IDE files
 .vs/
@@ -18,3 +20,20 @@ Thumbs.db
 
 # Ignore logs
 *.log
+
+# Ignore temporary files
+*.tmp
+*.temp
+*.cache
+*.bak
+*.swp
+*.swo
+*~
+
+# Ignore certificates and private keys
+*.pem
+*.p12
+*.csr
+*.cer
+*.key
+*.cert

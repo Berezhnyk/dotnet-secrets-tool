@@ -75,6 +75,56 @@ jobs:
         cd publish/${{ matrix.runtime }}
         7z a ../../${{ matrix.artifact-name }}.zip ${{ matrix.executable-name }}
 
+    - name: Code sign (macOS)
+      if: runner.os == 'macOS'
+      env:
+        APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      run: |
+        # Check if secrets are available
+        if [[ -z "$APPLE_CERTIFICATE" || -z "$APPLE_CERTIFICATE_PASSWORD" || -z "$APPLE_TEAM_ID" ]]; then
+          echo "⚠️  Apple code signing secrets not available - skipping code signing"
+          echo "To enable code signing, add these secrets to your GitHub repository:"
+          echo "- APPLE_CERTIFICATE (base64 encoded .p12 file)"
+          echo "- APPLE_CERTIFICATE_PASSWORD (password for .p12 file)"
+          echo "- APPLE_TEAM_ID (your Apple Developer Team ID)"
+          exit 0
+        fi
+        
+        echo "🔐 Setting up code signing..."
+        
+        # Import certificate
+        echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+        security create-keychain -p temp build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p temp build.keychain
+        security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple: -s -k temp build.keychain
+        
+        # Get certificate identity
+        CERT_IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+        echo "📋 Using certificate: $CERT_IDENTITY"
+        
+        # Sign the binary
+        echo "✍️  Signing binary..."
+        codesign --sign "$CERT_IDENTITY" \
+                 --options runtime \
+                 --entitlements ./scripts/entitlements.plist \
+                 --force \
+                 --timestamp \
+                 ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
+        
+        # Verify signature
+        echo "✅ Verifying signature..."
+        codesign --verify --verbose ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
+        
+        # Clean up
+        rm certificate.p12
+        security delete-keychain build.keychain
+        
+        echo "🎉 Code signing completed successfully!"
+
     - name: Create archive (Unix)
       if: runner.os != 'Windows'
       run: |
