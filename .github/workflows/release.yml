@@ -66,7 +66,8 @@ jobs:
           --self-contained true \
           --output ./publish/${{ matrix.runtime }} \
           -p:PublishSingleFile=true \
-          -p:PublishTrimmed=false
+          -p:PublishTrimmed=false \
+          -p:IncludeNativeLibrariesForSelfExtract=true
 
     - name: Create archive (Windows)
       if: runner.os == 'Windows'
@@ -80,8 +81,10 @@ jobs:
         APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
         APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
       run: |
-        # Check if secrets are available
+        # Check if secrets are available for code signing
         if [[ -z "$APPLE_CERTIFICATE" || -z "$APPLE_CERTIFICATE_PASSWORD" || -z "$APPLE_TEAM_ID" ]]; then
           echo "⚠️  Apple code signing secrets not available - skipping code signing"
           echo "To enable code signing, add these secrets to your GitHub repository:"
@@ -92,6 +95,11 @@ jobs:
         fi
         
         echo "🔐 Setting up code signing..."
+        
+        # Debug: Show system info
+        echo "📋 System information:"
+        uname -a
+        xcode-select --print-path
         
         # Import certificate
         echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
@@ -105,20 +113,96 @@ jobs:
         CERT_IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
         echo "📋 Using certificate: $CERT_IDENTITY"
         
+        # Debug: Check binary before signing
+        echo "🔍 Pre-signing binary info:"
+        ls -la ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
+        file ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
+        
+        # Test binary before signing
+        echo "🧪 Testing unsigned binary..."
+        if ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }} --help > /dev/null 2>&1; then
+          echo "✅ Unsigned binary works"
+        else
+          echo "❌ Unsigned binary is already broken"
+          exit 1
+        fi
+        
         # Sign the binary
         echo "✍️  Signing binary..."
-        codesign --sign "$CERT_IDENTITY" \
+        if ! codesign --sign "$CERT_IDENTITY" \
                  --options runtime \
                  --entitlements ./scripts/entitlements.plist \
                  --force \
                  --timestamp \
-                 ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
+                 --deep \
+                 --verbose \
+                 ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}; then
+          echo "❌ Code signing failed"
+          exit 1
+        fi
         
         # Verify signature
         echo "✅ Verifying signature..."
-        codesign --verify --verbose ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
+        codesign --verify --verbose=2 ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
+        spctl --assess --verbose ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
         
-        # Clean up
+        # Test the signed binary
+        echo "🧪 Testing signed binary..."
+        ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }} --help > /dev/null
+        if [[ $? -eq 0 ]]; then
+          echo "✅ Signed binary test passed"
+        else
+          echo "❌ Signed binary test failed"
+          exit 1
+        fi
+        
+        # Notarize if credentials are available
+        if [[ -n "$APPLE_ID" && -n "$APPLE_PASSWORD" ]]; then
+          echo "📋 Notarizing binary..."
+          
+          # Create a temporary directory for notarization
+          TEMP_DIR=$(mktemp -d)
+          ARCHIVE_PATH="$TEMP_DIR/${{ matrix.executable-name }}.zip"
+          
+          # Create archive for notarization
+          ditto -c -k --keepParent ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }} "$ARCHIVE_PATH"
+          
+          # Submit for notarization
+          echo "⏳ Submitting for notarization (this may take a few minutes)..."
+          xcrun notarytool submit "$ARCHIVE_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          
+          if [[ $? -eq 0 ]]; then
+            echo "✅ Notarization successful! Stapling..."
+            
+            # Staple the notarization to the binary
+            xcrun stapler staple ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
+            
+            if [[ $? -eq 0 ]]; then
+              echo "🎉 Notarization and stapling completed successfully!"
+              echo "   Binary will run without any Gatekeeper warnings when downloaded."
+            else
+              echo "⚠️  Stapling failed, but notarization was successful"
+            fi
+          else
+            echo "⚠️  Notarization failed, but code signing was successful"
+            echo "   Binary is signed but may show Gatekeeper warnings when downloaded"
+          fi
+          
+          # Clean up notarization temp files
+          rm -rf "$TEMP_DIR"
+        else
+          echo "ℹ️  Notarization skipped (APPLE_ID and APPLE_PASSWORD not provided)"
+          echo "   Binary is signed but may show Gatekeeper warnings when downloaded"
+          echo "   To enable notarization, add these optional secrets:"
+          echo "   - APPLE_ID (your Apple ID email)"
+          echo "   - APPLE_PASSWORD (app-specific password)"
+        fi
+        
+        # Clean up certificate files
         rm certificate.p12
         security delete-keychain build.keychain
         

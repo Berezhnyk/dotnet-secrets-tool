@@ -38,19 +38,24 @@ If you encounter the error "Apple could not verify 'SecretsTool' is free of malw
 
 **For End Users (Quick Fix):**
 ```bash
-# Remove quarantine flag
+# Remove quarantine flag from downloaded binary
 xattr -d com.apple.quarantine ~/Downloads/SecretsTool
 
-# Move to bin folder (requires sudo)
+# Move to bin folder (optional)
 sudo mv ~/Downloads/SecretsTool /usr/local/bin/SecretsTool
 
 # Make executable (only if you encounter permission errors)
 sudo chmod +x /usr/local/bin/SecretsTool
 ```
 
+**Why This Happens:**
+- Even signed binaries get "quarantined" when downloaded from the internet
+- **Code signing** alone prevents most warnings but not quarantine
+- **Notarization** (Apple's malware scan) prevents quarantine completely
+
 **For Developers with Apple Developer Account:**
 
-If you're building from source and have an Apple Developer account, you can properly code sign the application:
+If you're building from source and have an Apple Developer account, you can properly code sign and notarize the application:
 
 **Option A: Local Code Signing**
 1. **Install your Apple Developer Certificate:**
@@ -72,7 +77,7 @@ If you're building from source and have an Apple Developer account, you can prop
    ./scripts/notarize-macos.sh ./publish/osx-arm64/SecretsTool
    ```
 
-**Option B: GitHub Actions Code Signing (Recommended)**
+**Option B: GitHub Actions Code Signing + Notarization (Recommended)**
 1. **Set up certificates for automated signing:**
    ```bash
    # Export your certificate for GitHub Actions
@@ -84,17 +89,24 @@ If you're building from source and have an Apple Developer account, you can prop
 
 2. **Add GitHub Secrets:**
    - Go to your GitHub repository → Settings → Secrets and variables → Actions
-   - Add these secrets:
+   - **Required for code signing:**
      - `APPLE_CERTIFICATE`: (paste the base64 certificate)
      - `APPLE_CERTIFICATE_PASSWORD`: (password you used when exporting)
      - `APPLE_TEAM_ID`: (your Team ID from Apple Developer Portal)
+   - **Optional for notarization (eliminates ALL warnings):**
+     - `APPLE_ID`: (your Apple ID email)
+     - `APPLE_PASSWORD`: (app-specific password from appleid.apple.com)
 
-3. **Create signed releases:**
+3. **Create signed and notarized releases:**
    ```bash
-   # Create a new release - GitHub Actions will automatically sign it
-   git tag v1.0.3
-   git push origin v1.0.3
+   # Create a new release - GitHub Actions will automatically sign and notarize
+   git tag v1.0.5
+   git push origin v1.0.5
    ```
+
+**Benefits:**
+- **Code Signing Only**: Eliminates most Gatekeeper warnings
+- **Code Signing + Notarization**: Eliminates ALL warnings, no user interaction needed
 
 See `GITHUB_ACTIONS_SETUP.md` for detailed setup instructions.
 

@@ -8,22 +8,22 @@
     
     <!-- Allow the app to use hardened runtime -->
     <key>com.apple.security.cs.allow-jit</key>
-    <false/>
+    <true/>
     
     <!-- Allow the app to use dynamic code signing -->
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-    <false/>
+    <true/>
     
     <!-- Allow the app to disable executable memory protection -->
     <key>com.apple.security.cs.disable-executable-page-protection</key>
-    <false/>
+    <true/>
     
     <!-- Allow the app to use DYLD environment variables -->
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
-    <false/>
+    <true/>
     
     <!-- Allow the app to disable library validation -->
     <key>com.apple.security.cs.disable-library-validation</key>
-    <false/>
+    <true/>
 </dict>
 </plist>

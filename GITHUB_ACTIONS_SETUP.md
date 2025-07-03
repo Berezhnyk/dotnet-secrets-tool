@@ -2,25 +2,55 @@
 
 ## Required GitHub Secrets
 
-You need to set up these secrets in your GitHub repository:
+You need to set up these secrets in your GitHub repository for **code signing**:
 
-### 1. APPLE_CERTIFICATE
+### 1. APPLE_CERTIFICATE (Required)
 - **What it is:** Your Developer ID Application certificate in base64 format
 - **How to get it:** 
   1. Export your certificate using: `./scripts/export-certificate.sh`
   2. Convert to base64: `base64 -i developer_id_certificate.p12 | pbcopy`
   3. Paste the base64 output as the secret value
 
-### 2. APPLE_CERTIFICATE_PASSWORD
+### 2. APPLE_CERTIFICATE_PASSWORD (Required)
 - **What it is:** The password you used when exporting the certificate
 - **How to get it:** Use the same password you entered in the export script
 
-### 3. APPLE_TEAM_ID
+### 3. APPLE_TEAM_ID (Required)
 - **What it is:** Your Apple Developer Team ID
 - **How to get it:** 
   1. Go to [Apple Developer Portal](https://developer.apple.com/account/)
   2. Look for "Team ID" in the top right corner
   3. It looks like: `ABC123XYZ9`
+
+## Optional GitHub Secrets (for Notarization)
+
+Add these secrets for **complete Gatekeeper bypass** (recommended):
+
+### 4. APPLE_ID (Optional but Recommended)
+- **What it is:** Your Apple ID email address
+- **Example:** `your-email@example.com`
+
+### 5. APPLE_PASSWORD (Optional but Recommended)
+- **What it is:** An App-Specific Password for notarization
+- **How to get it:**
+  1. Go to [Apple ID Account Management](https://appleid.apple.com/account/manage)
+  2. Sign in and complete 2FA
+  3. In "Security" section, click "Generate Password" under "App-Specific Passwords"
+  4. Enter label: "GitHub Actions Notarization"
+  5. Use the generated password (format: `abcd-efgh-ijkl-mnop`)
+
+## Benefits of Each Level
+
+### Code Signing Only (3 secrets)
+✅ Eliminates most Gatekeeper warnings
+✅ Establishes developer identity
+⚠️ May still show warnings on first download
+
+### Code Signing + Notarization (5 secrets)
+✅ Eliminates ALL Gatekeeper warnings
+✅ Complete trust on first download
+✅ No user interaction required
+✅ Professional-grade distribution
 
 ## Setting Up GitHub Secrets
 
