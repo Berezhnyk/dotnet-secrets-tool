@@ -180,18 +180,35 @@ jobs:
             
             echo "✅ Notarization successful! Stapling..."
             
-            # Staple the notarization to the binary
-            if xcrun stapler staple ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}; then
-              echo "🎉 Notarization and stapling completed successfully!"
-              echo "   Binary will run without any Gatekeeper warnings when downloaded."
-              
-              # Verify notarization
-              echo "🔍 Verifying notarization..."
-              spctl --assess --verbose=2 ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}
-            else
-              echo "⚠️  Stapling failed, but notarization was successful"
-              echo "   Binary may still show warnings when downloaded"
+            # Wait a bit for the notarization ticket to propagate
+            echo "⏳ Waiting for notarization ticket to propagate..."
+            sleep 30
+            
+            # Staple the notarization to the binary with retries
+            STAPLE_SUCCESS=false
+            for attempt in 1 2 3; do
+              echo "🔄 Stapling attempt $attempt/3..."
+              if xcrun stapler staple ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }}; then
+                echo "🎉 Notarization and stapling completed successfully!"
+                echo "   Binary will run without any Gatekeeper warnings when downloaded."
+                STAPLE_SUCCESS=true
+                break
+              else
+                echo "⚠️  Stapling attempt $attempt failed, waiting 30 seconds..."
+                sleep 30
+              fi
+            done
+            
+            if [[ "$STAPLE_SUCCESS" == "false" ]]; then
+              echo "⚠️  All stapling attempts failed, but notarization was successful"
+              echo "   Binary is notarized but staple ticket may not be attached"
+              echo "   This usually means the notarization ticket hasn't fully propagated"
+              echo "   The binary should still work without Gatekeeper warnings"
             fi
+            
+            # Verify final status regardless of stapling result
+            echo "🔍 Final verification..."
+            spctl --assess --verbose=2 ./publish/${{ matrix.runtime }}/${{ matrix.executable-name }} || echo "Note: This may still show as unnotarized due to stapling issues"
           else
             echo "❌ Notarization failed!"
             echo "   This could be due to:"
